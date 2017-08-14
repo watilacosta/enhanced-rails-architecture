@@ -35,115 +35,125 @@ Concerns are pieces of code which you can include to as many classes as you need
 
 #### Code before concerns in use
 
-    # app/models/article.rb:
+```ruby
+# app/models/article.rb:
 
-    class Article < ActiveRecord::Base
-      has_many :comments, as: :commentable
+class Article < ActiveRecord::Base
+  has_many :comments, as: :commentable
 
-      def find_first_comment
-        comments.first(created_at DESC)
-      end
+  def find_first_comment
+    comments.first(created_at DESC)
+  end
 
-      def self.least_commented
-        # too lazy to implement
-      end
-    end
+  def self.least_commented
+    # too lazy to implement
+  end
+end
+```
 
 #### Concerns in use
 
-    # app/models/article.rb:
+```ruby
+# app/models/article.rb:
 
-    class Article < ActiveRecord::Base
-      include Commentable
+class Article < ActiveRecord::Base
+  include Commentable
+end
+```
+
+```ruby
+# app/models/news.rb
+
+class News < ActiveRecord::Base
+  include Commentable
+end
+```
+
+```ruby
+# app/models/concerns/commentable.rb:
+
+module Commentable
+  extend ActiveSupport::Concern
+
+  included do
+    has_many :comments, as: :commentable
+  end
+
+  def find_first_comment
+    comments.first(created_at DESC)
+  end
+
+  module ClassMethods
+    def least_commented
+      # too lazy to implement
     end
-
-
-    # app/models/news.rb
-
-    class News < ActiveRecord::Base
-      include Commentable
-    end
-
-
-    # app/models/concerns/commentable.rb:
-
-    module Commentable
-      extend ActiveSupport::Concern
-
-      included do
-        has_many :comments, as: :commentable
-      end
-
-      def find_first_comment
-        comments.first(created_at DESC)
-      end
-
-      module ClassMethods
-        def least_commented
-          # too lazy to implement
-        end
-      end
-    end
+  end
+end
+```
 
 ### Form Objects
 
 Sometimes you can have a form which is not possible to map to one entity. You can have form with two or three or more entities in one form and those entities doesn't even need to have a relation between each other. In such case you can use a form object and still use standard Rails validations.
 
-    # app/models/register_form.rb:
+```ruby
+# app/models/register_form.rb:
 
-    class RegisterForm
-      include ActiveModel::Model
+class RegisterForm
+  include ActiveModel::Model
 
-      validates_presence_of :name
-      validates_presence_of :description
+  validates_presence_of :name
+  validates_presence_of :description
 
-      def user
-        @user ||= User.new
-      end
+  def user
+    @user ||= User.new
+  end
 
-      def note
-        @note ||= Note.new
-      end
+  def note
+    @note ||= Note.new
+  end
 
-      def submit(params)
-        user.attributes = params.slice(:name)
-        note.attributes = params.slice(:description)
+  def submit(params)
+    user.attributes = params.slice(:name)
+    note.attributes = params.slice(:description)
 
-        if valid?
-          user.save!
-          note.save!
-          true
-        else
-          false
-        end
-      end
+    if valid?
+      user.save!
+      note.save!
+      true
+    else
+      false
     end
+  end
+end
+```
 
+```erb
+# app/views/users/new.html.erb:
 
-    # app/views/users/new.html.erb:
+<%= form_for @register_form do |f| %>
+  <%= f.text :name %>
+  <%= f.text :description %>
+  <%= f.submit "Register" %>
+<% end %>
+```
 
-    <%= form_for @register_form do |f| %>
-      <%= f.text :name %>
-      <%= f.text :description %>
-      <%= f.submit "Register" %>
-    <% end %>
+```ruby
+# app/controllers/users_controller.rb
 
+def new
+  @register_form = RegisterForm.new
+end
 
-    # app/controllers/users_controller.rb
-
-    def new
-      @register_form = RegisterForm.new
-    end
-
-    def create
-      @register_form = RegisterForm.new
-      if @register_form.submit(params[:user])
-        session[:user_id] = @register_form.user.id
-        redirect_to @register_form.user
-      else
-        render "new"
-      end
-    end
+def create
+  @register_form = RegisterForm.new
+  if @register_form.submit(params[:user])
+    session[:user_id] = @register_form.user.id
+    redirect_to @register_form.user
+  else
+    render "new"
+  end
+end
+```
 
 ### Decorators
 
@@ -151,83 +161,94 @@ Decorators add another thin presentation layer in which you can adjust view outp
 
 #### Without Decorators
 
-    # app/controllers/articles_controller.rb:
+```ruby
+# app/controllers/articles_controller.rb:
 
-    def show
-      @article = Article.find(params[:id])
-    end
+def show
+  @article = Article.find(params[:id])
+end
+```
 
+```ruby
+# app/controllers/articles_helper.rb:
 
-    # app/controllers/articles_helper.rb:
+def publication_status(article)
+  if article.published?
+    "Published at #{article.published_at.strftime('%A, %B %e')}"
+  else
+    "Unpublished"
+  end
+end
+```
 
-    def publication_status(article)
-      if article.published?
-        "Published at #{article.published_at.strftime('%A, %B %e')}"
-      else
-        "Unpublished"
-      end
-    end
+```erb
+# app/views/articles/show.html.erb:
 
-
-    # app/views/articles/show.html.erb:
-
-    <div class="time">
-      <%= publication_status @article.published_at %>
-    </div>
+<div class="time">
+  <%= publication_status @article.published_at %>
+</div>
+```
 
 #### With using Draper
 
-    # app/decorators/article_decorator.rb:
+```ruby
+# app/decorators/article_decorator.rb:
 
-    class ArticleDecorator < Draper::Decorator
-      delegate_all
+class ArticleDecorator < Draper::Decorator
+  delegate_all
 
-      def publication_status
-        if published?
-          "Published at #{published_at}"
-        else
-          "Unpublished"
-        end
-      end
-
-      def published_at
-        object.published_at.strftime("%A, %B %e")
-      end
+  def publication_status
+    if published?
+      "Published at #{published_at}"
+    else
+      "Unpublished"
     end
+  end
 
+  def published_at
+    object.published_at.strftime("%A, %B %e")
+  end
+end
+```
 
-    # app/controllers/articles_controller.rb:
+```ruby
+# app/controllers/articles_controller.rb:
 
-    def show
-      @article = Article.find(params[:id]).decorate
-    end
+def show
+  @article = Article.find(params[:id]).decorate
+end
+```
 
+```erb
+# app/views/articles/show.html.erb:
 
-    # app/views/articles/show.html.erb:
-
-    <div class="time">
-      <%= @article.publication_status %>
-    </div>
+<div class="time">
+  <%= @article.publication_status %>
+</div>
+```
 
 ### Helpers
 
 Helpers are methods accessible in views usually accepting some value and returning it back in some modified form.  
 It should be used for adjusting the output, no business logic should be involved here.  Very often it is used for formatting.
 
-    # app/helpers/application_helper.rb:
+```ruby
+# app/helpers/application_helper.rb:
 
-    class ApplicationHelper
-      def humanize_date
-        date.strftime("%d. %m. %Y")
-      end
-    end
+class ApplicationHelper
+  def humanize_date
+    date.strftime("%d. %m. %Y")
+  end
+end
+```
 
+```erb
+# app/views/articles/show.html.erb:
 
-    # app/views/articles/show.html.erb:
-
-    <div class="time">
-      <%= humanize_date @article.published_at %>
-    </div>
+<div class="time">
+  <%= humanize_date @article.published_at %>
+</div>
+```
 
 ### Policies
 
@@ -236,76 +257,86 @@ The boundary between decorators and policies is very thin.
 
 #### Authorization without policies
 
-    # app/views/articles/show.html.erb:
+```erb
+# app/views/articles/show.html.erb:
 
-    <div class="buttons">
-      <% if not @article.published? && @user.admin? %>
-        <%= button_to article_edit(@article), method: :get %>
-      <% end %>
-    </div>
+<div class="buttons">
+  <% if not @article.published? && @user.admin? %>
+    <%= button_to article_edit(@article), method: :get %>
+  <% end %>
+</div>
+```
 
 #### Authorization using policies (without Pundit)
 
-    # app/policies/article_policy.rb:
+```ruby
+# app/policies/article_policy.rb:
 
-    class ArticlePolicy
-      attr_reader :user, :article
+class ArticlePolicy
+  attr_reader :user, :article
 
-      def initialize(user, article)
-        @user = user
-        @article = article
-      end
+  def initialize(user, article)
+    @user = user
+    @article = article
+  end
 
-      def update?
-        user.admin? or not article.published?
-      end
-    end
+  def update?
+    user.admin? or not article.published?
+  end
+end
+```
 
+```ruby
+# app/controllers/articles_controller.rb:
 
-    # app/controllers/articles_controller.rb:
+def show
+  @article = Article.find params[:id]
+  @article_policy = ArticlePolicy.new current_user, @article
+end
+```
 
-    def show
-      @article = Article.find params[:id]
-      @article_policy = ArticlePolicy.new current_user, @article
-    end
+```erb
+# app/views/articles/show.html.erb:
 
-
-    # app/views/articles/show.html.erb:
-
-    <div class="buttons">
-      <% if not @article_policy.update? %>
-        <%= button_to article_edit(@article), method: :get %>
-      <% end %>
-    </div>
+<div class="buttons">
+  <% if not @article_policy.update? %>
+    <%= button_to article_edit(@article), method: :get %>
+  <% end %>
+</div>
+```
 
 #### Authorization using Pundit
 
-    # app/policies/article.rb:
+```ruby
+# app/policies/article.rb:
 
-    class ArticlePolicy < ApplicationPolicy
-      # automatically gives argument user
-      # and article, based on file name
-      def update?
-        user.admin? or not article.published?
-      end
-    end
+class ArticlePolicy < ApplicationPolicy
+  # automatically gives argument user
+  # and article, based on file name
+  def update?
+    user.admin? or not article.published?
+  end
+end
+```
 
+```ruby
+# app/controllers/articles_controller.rb:
 
-    # app/controllers/articles_controller.rb:
+def show
+  @article = Article.find params[:id]
+  authorize @article
+end
+```
 
-    def show
-      @article = Article.find params[:id]
-      authorize @article
-    end
+```erb
+# app/views/articles/show.html.erb:
 
-
-    # app/views/articles/show.html.erb:
-
-    <div class="buttons">
-      <% if policy(@article).update? %>
-        <%= button_to article_edit(@article), method: :get %>
-      <% end %>
-    </div>
+<div class="buttons">
+  <% if policy(@article).update? %>
+    <%= button_to article_edit(@article), method: :get %>
+  <% end %>
+</div>
+```
 
 ### Publishers and Listeners
 
@@ -314,105 +345,117 @@ The important thing is, you don't want to hardcode those reactions to the deleti
 
 ####  Simple Listeners
 
-    # app/models/article.rb:
+```ruby
+# app/models/article.rb:
 
-    class Article < ActiveRecord::Base
-      after_commit :notify_editors,     on: :create
-      after_commit :generate_feed_item, on: :create
+class Article < ActiveRecord::Base
+  after_commit :notify_editors,     on: :create
+  after_commit :generate_feed_item, on: :create
 
-      private
-      def notify_editors
-        EditorMailer.send_notification(self).deliver_later
-      end
+  private
+  def notify_editors
+    EditorMailer.send_notification(self).deliver_later
+  end
 
-      def generate_feed_item
-        FeedItem.create(self)
-      end
-    end
+  def generate_feed_item
+    FeedItem.create(self)
+  end
+end
+```
 
 #### Listeners using Wisper
 
-    # config/initializers/subscribers.rb:
+```ruby
+# config/initializers/subscribers.rb:
 
-    Article.subscribe(ArticleListener) / published synchronously
-    # Article.subscribe(ArticleListener, async: true) / for asynchronous publishing
+Article.subscribe(ArticleListener) / published synchronously
+# Article.subscribe(ArticleListener, async: true) / for asynchronous publishing
+```
 
+```ruby
+# app/models/article.rb:
 
-    # app/models/article.rb:
+class Article < ActiveRecord::Base
+  include Wisper.model
+end
+```
 
-    class Article < ActiveRecord::Base
-      include Wisper.model
-    end
+```ruby
+# app/listeners/article_listener.rb:
 
-
-    # app/listeners/article_listener.rb:
-
-    class ArticleListener
-      def self.after_create(article)
-        EditorMailer.send_notification(article).deliver_later
-        FeedItem.create(article)
-      end
-    end
+class ArticleListener
+  def self.after_create(article)
+    EditorMailer.send_notification(article).deliver_later
+    FeedItem.create(article)
+  end
+end
+```
 
 #### Decoupled publishers with Wisper
 
-    # app/publishers/article.rb:
+```ruby
+# app/publishers/article.rb:
 
-    class DeleteArticle
-      include Wisper::Publisher
+class DeleteArticle
+  include Wisper::Publisher
 
-      def call(article_id)
-        article = Article.find_by_id(article_id)
+  def call(article_id)
+    article = Article.find_by_id(article_id)
 
-        # do some evil things with the article
+    # do some evil things with the article
 
-        if article.deleted?
-          broadcast(:delete_successful, article.id)
-        else
-          broadcast(:delete_failed, article.id)
-        end
-      end
+    if article.deleted?
+      broadcast(:delete_successful, article.id)
+    else
+      broadcast(:delete_failed, article.id)
     end
+  end
+end
+```
 
+```ruby
+# app/controllers/articles_controller.rb:
 
-    # app/controllers/articles_controller.rb:
+def destroy
+  delete_article = DeleteArticle.new
 
-    def destroy
-      delete_article = DeleteArticle.new
+  delete_article.subscribe(ArticleMailer,      async: true)
+  delete_article.subscribe(StatisticsRecorder, async: true)
 
-      delete_article.subscribe(ArticleMailer,      async: true)
-      delete_article.subscribe(StatisticsRecorder, async: true)
+  delete_article.on(:delete_successful) { |article_id| redirect_to order_path(order_id) }
+  delete_article.on(:delete_failed)     { |article_id| render action: :new }
 
-      delete_article.on(:delete_successful) { |article_id| redirect_to order_path(order_id) }
-      delete_article.on(:delete_failed)     { |article_id| render action: :new }
-
-      delete_article.call(params[:id])
-    end
+  delete_article.call(params[:id])
+end
+```
 
 ### Services
 
 If the logic in your controller is starting to blow up, it is time to extract it so a separate service object.
 
-    # app/controllers/user_controller.rb:
+```ruby
+# app/controllers/user_controller.rb:
 
-    def show
-      @user = GetUserAndNotify.find(params[:id])
+def show
+  @user = GetUserAndNotify.find(params[:id])
+end
+```
+
+```ruby
+# app/services/get_user_and_notify.rb:
+
+class GetUserAndNotify
+  def self.find(id)
+    user = User.find id
+    if user.notify_on_get?
+      Logger.log "User #{user.name} with id #{user.id} was requested"
+      EventNotifier.log_event user.class.name, user.id
     end
-
-
-    # app/services/get_user_and_notify.rb:
-
-    class GetUserAndNotify
-      def self.find(id)
-        user = User.find id
-        if user.notify_on_get?
-          Logger.log "User #{user.name} with id #{user.id} was requested"
-          EventNotifier.log_event user.class.name, user.id
-        end
-        user.get_count += 1
-        user.save
-        user
-      end
-    end
+    user.get_count += 1
+    user.save
+    user
+  end
+end
+```
 
 > This sheet was created by Jiří Procházka https://www.linkedin.com/in/jiriprochazka/ and is based on the lecture of Honza Minárik https://www.linkedin.com/in/janminarik which he has made for CSRUG. It was created with his permission.
