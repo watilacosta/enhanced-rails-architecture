@@ -188,6 +188,41 @@ end
   <%= publication_status @article.published_at %>
 </div>
 ```
+#### Without Draper
+
+```ruby
+# app/decorators/article_decorator.rb:
+
+class ArticleDecorator
+  def initialize(article)
+    @article = article
+  end
+
+  def published_at(view)
+    view.content_tag(:time, article.published_at.strftime("%A, %B %e"))
+  end
+
+  private
+
+  attr_reader :article
+end
+```
+
+```ruby
+# app/controllers/articles_controller.rb:
+
+def show
+  @article = Article.first
+  @article_decorator = ArticleDecorator.new(@article)
+end
+```
+
+```erb
+# app/views/articles/show.html.erb:
+
+<h1><%= @article.title %></h1>
+<p><%= @article_decorator.published_at(self) %></p>
+```
 
 #### With using Draper
 
